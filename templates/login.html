@@ -1,0 +1,189 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>로그인</title>
+    <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;700&display=swap" rel="stylesheet">
+    <style>
+        /* 전체적인 스타일 */
+        body { 
+            font-family: 'Noto Sans KR', sans-serif; 
+            display: flex; 
+            justify-content: center; 
+            align-items: center; 
+            min-height: 100vh; 
+            margin: 0; 
+            background: linear-gradient(135deg, #a8c0ff, #3f2b96); /* 멋진 보라색 그라데이션 */
+            color: #333;
+        }
+        .container { 
+            background-color: #ffffff; 
+            padding: 40px; 
+            border-radius: 15px; 
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2); /* 그림자 강화 */
+            text-align: center; 
+            max-width: 450px; 
+            width: 90%; 
+            position: relative;
+            animation: fadeInScale 0.8s ease-out; /* 등장 애니메이션 */
+        }
+        h1 { 
+            color: #3f2b96; /* 진한 보라색 */
+            margin-bottom: 30px; 
+            font-size: 2.5em;
+            font-weight: 700;
+            text-shadow: 1px 1px 2px rgba(0,0,0,0.1);
+        }
+        /* 입력 필드 */
+        input[type="text"], input[type="password"] { 
+            width: calc(100% - 24px); /* 패딩 고려 */
+            padding: 12px; 
+            margin-bottom: 20px; 
+            border: 1px solid #ced4da; 
+            border-radius: 8px; 
+            font-size: 1.1em;
+            box-sizing: border-box;
+            transition: border-color 0.3s ease, box-shadow 0.3s ease;
+        }
+        input[type="text"]:focus, input[type="password"]:focus {
+            border-color: #a8c0ff; /* 포커스 시 색상 변경 */
+            box-shadow: 0 0 8px rgba(168, 192, 255, 0.5);
+            outline: none; /* 기본 아웃라인 제거 */
+        }
+        /* 버튼 스타일 */
+        button { 
+            background-color: #007bff; 
+            color: white; 
+            padding: 14px 28px; 
+            border: none; 
+            border-radius: 8px; 
+            cursor: pointer; 
+            font-size: 1.2em; 
+            font-weight: 700;
+            transition: background-color 0.3s ease, transform 0.2s ease, box-shadow 0.3s ease; 
+            box-shadow: 0 4px 10px rgba(0, 0, 0, 0.15);
+            width: 100%;
+            margin-top: 10px;
+        }
+        button:hover { 
+            background-color: #0056b3; 
+            transform: translateY(-3px); 
+            box-shadow: 0 6px 15px rgba(0, 0, 0, 0.25);
+        }
+        /* 메시지 박스 */
+        .message { 
+            margin-top: 25px; 
+            padding: 15px; 
+            border-radius: 8px; 
+            font-weight: bold; 
+            font-size: 1em;
+            animation: fadeIn 0.5s ease-out;
+        }
+        .message.success { background-color: #d4edda; color: #155724; border: 1px solid #c3e6cb; }
+        .message.error { background-color: #f8d7da; color: #721c24; border: 1px solid #f5c6cb; }
+        .hidden { display: none; }
+        .flash { /* Flask의 flash 메시지 스타일 */
+            background-color: #ffe0b2; /* 연한 주황색 */
+            color: #e65100; /* 진한 주황색 */
+            border: 1px solid #ffcc80;
+            padding: 12px;
+            margin-bottom: 20px;
+            border-radius: 8px;
+            font-weight: bold;
+            font-size: 0.95em;
+            text-align: center;
+        }
+        p:last-of-type { /* 하단 텍스트 */
+            font-size: 0.85em;
+            color: #777;
+            line-height: 1.5;
+            margin-top: 25px;
+        }
+
+        /* 애니메이션 */
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(-10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        @keyframes fadeInScale {
+            from { opacity: 0; transform: scale(0.9); }
+            to { opacity: 1; transform: scale(1); }
+        }
+
+        /* 반응형 디자인 (간단하게) */
+        @media (max-width: 480px) {
+            .container {
+                padding: 25px;
+            }
+            h1 {
+                font-size: 2em;
+            }
+            button {
+                padding: 12px 20px;
+                font-size: 1.1em;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>로그인</h1>
+        {% with messages = get_flashed_messages(with_categories=true) %}
+          {% if messages %}
+            <ul class="flashes" style="list-style: none; padding: 0;">
+            {% for category, message in messages %}
+              <li class="flash {{ category }}">{{ message }}</li>
+            {% endfor %}
+            </ul>
+          {% endif %}
+        {% endwith %}
+
+        <input type="text" id="username" placeholder="아이디 (이름)">
+        <input type="password" id="password" placeholder="비밀번호">
+        <button id="loginBtn">로그인</button>
+        <p id="message" class="message"></p>
+        <p style="margin-top: 20px; font-size: 0.9em; color: #888;">
+            * 첫 접속이라면 관리자에게 계정을 요청하세요. <br>
+            (개발용: `/register` 경로로 직접 접속하여 관리자 계정을 만들 수 있습니다.)
+        </p>
+    </div>
+
+    <script>
+        document.getElementById('loginBtn').addEventListener('click', async () => {
+            const username = document.getElementById('username').value;
+            const password = document.getElementById('password').value;
+            const messageDiv = document.getElementById('message');
+
+            if (!username || !password) {
+                messageDiv.textContent = '아이디와 비밀번호를 모두 입력해주세요.';
+                messageDiv.className = 'message error';
+                return;
+            }
+
+            try {
+                const response = await fetch('/api/login', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ name: username, password: password })
+                });
+                const data = await response.json();
+
+                if (response.ok) {
+                    messageDiv.textContent = data.message;
+                    messageDiv.className = 'message success';
+                    // 로그인 성공 후 서버에서 전달받은 URL로 이동
+                    window.location.href = data.redirect_url;
+                } else {
+                    messageDiv.textContent = data.message || '로그인 실패';
+                    messageDiv.className = 'message error';
+                }
+            } catch (error) {
+                messageDiv.textContent = '네트워크 오류';
+                messageDiv.className = 'message error';
+                console.error('Error:', error);
+            }
+        });
+    </script>
+</body>
+</html>

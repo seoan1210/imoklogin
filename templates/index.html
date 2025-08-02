@@ -1,0 +1,382 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>룰렛 돌리기!</title>
+    <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;700&display=swap" rel="stylesheet">
+    <style>
+        /* 전체적인 스타일 */
+        body { 
+            font-family: 'Noto Sans KR', sans-serif; 
+            display: flex; 
+            justify-content: center; 
+            align-items: center; 
+            min-height: 100vh; 
+            margin: 0; 
+            background: linear-gradient(135deg, #84fab0, #8fd3f4); /* 시원한 그라데이션 배경 */
+            color: #333;
+        }
+        .container { 
+            background-color: #ffffff; 
+            padding: 40px; 
+            border-radius: 20px; /* 더 둥글게 */
+            box-shadow: 0 15px 40px rgba(0, 0, 0, 0.2); /* 그림자 강화 */
+            text-align: center; 
+            max-width: 500px; /* 좀 더 넓게 */
+            width: 90%; 
+            position: relative;
+            animation: fadeInScale 0.8s ease-out; /* 등장 애니메이션 */
+        }
+        h1 { 
+            color: #28a745; /* 포인트 색상 (녹색) */
+            margin-bottom: 25px; 
+            font-size: 2.8em; /* 더 크게 */
+            font-weight: 700;
+            text-shadow: 1px 1px 3px rgba(0,0,0,0.1);
+        }
+        .user-info { 
+            margin-bottom: 20px; 
+            font-size: 1.2em; 
+            color: #555; 
+            font-weight: 700;
+        }
+        p { 
+            color: #666; 
+            margin-bottom: 20px; 
+            font-size: 1.1em;
+        }
+        /* 룰렛 돌리기 버튼 */
+        button { 
+            background-color: #ff6b6b; /* 강렬한 빨간색 */
+            color: white; 
+            padding: 18px 35px; /* 더 크게 */
+            border: none; 
+            border-radius: 50px; /* 완전 둥근 버튼 */
+            cursor: pointer; 
+            font-size: 1.8em; /* 폰트 사이즈 키우기 */
+            font-weight: 700;
+            transition: background-color 0.3s ease, transform 0.2s ease, box-shadow 0.3s ease; 
+            box-shadow: 0 8px 15px rgba(0, 0, 0, 0.2); /* 버튼 그림자 강화 */
+            letter-spacing: 1px;
+            text-transform: uppercase;
+            margin-top: 30px;
+        }
+        button:hover { 
+            background-color: #e63946; 
+            transform: translateY(-5px) scale(1.02); /* 호버 시 더 크게 반응 */
+            box-shadow: 0 12px 20px rgba(0, 0, 0, 0.3);
+        }
+        button:disabled {
+            background-color: #cccccc;
+            cursor: not-allowed;
+            transform: none;
+            box-shadow: none;
+        }
+
+        /* 룰렛 결과 표시 */
+        #rouletteResult { 
+            margin-top: 35px; 
+            font-size: 1.8em; 
+            font-weight: bold; 
+            color: #ff6b6b; /* 결과 색상 */
+            min-height: 2em; /* 결과가 없어도 공간 유지 */
+        }
+
+        /* 사람 목록 */
+        #personList { 
+            list-style-type: none; 
+            padding: 0; 
+            margin-top: 25px; 
+            max-height: 200px; /* 스크롤 가능하도록 높이 제한 */
+            overflow-y: auto;
+            border: 1px solid #e0e0e0;
+            border-radius: 10px;
+            padding: 10px;
+            background-color: #fcfcfc;
+        }
+        #personList li { 
+            background-color: #f0f8ff; /* 연한 하늘색 배경 */
+            margin-bottom: 8px; 
+            padding: 12px 20px; 
+            border-radius: 8px; 
+            display: flex; 
+            justify-content: space-between; 
+            align-items: center; 
+            font-size: 1.05em;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.05);
+        }
+        #personList li span { 
+            font-weight: 700; 
+            color: #007bff; /* 파란색 티켓 수 */
+            font-size: 1.1em;
+        }
+
+        /* 로그아웃 버튼 */
+        .logout-button { 
+            position: absolute; 
+            top: 20px; 
+            right: 30px; 
+            background-color: #6c757d; 
+            padding: 10px 18px; 
+            font-size: 1em; 
+            box-shadow: none;
+            border-radius: 8px; /* 덜 둥글게 */
+            text-transform: none; /* 대문자 아님 */
+            font-weight: 400; /* 일반 폰트 굵기 */
+        }
+        .logout-button:hover { 
+            background-color: #5a6268; 
+            transform: none; 
+            box-shadow: none; 
+        }
+
+        /* 애니메이션 */
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(-10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        @keyframes fadeInScale {
+            from { opacity: 0; transform: scale(0.9); }
+            to { opacity: 1; transform: scale(1); }
+        }
+
+        /* 반응형 디자인 (간단하게) */
+        @media (max-width: 480px) {
+            .container {
+                padding: 25px;
+            }
+            h1 {
+                font-size: 2.2em;
+            }
+            button {
+                padding: 15px 25px;
+                font-size: 1.5em;
+            }
+            #rouletteResult {
+                font-size: 1.5em;
+            }
+            .logout-button {
+                top: 15px;
+                right: 15px;
+                padding: 8px 12px;
+                font-size: 0.9em;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <button class="logout-button" onclick="logout()">로그아웃</button>
+        <h1>룰렛 돌리기!</h1>
+        <p class="user-info">환영합니다, {{ current_user.name }}님!</p> 
+        <p>현재 룰렛권 현황:</p>
+        <ul id="personList">
+            </ul>
+        <button type="button" id="spinRouletteButton">룰렛 돌리기!</button>
+        <p id="rouletteResult"></p>
+    </div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            const personListElement = document.getElementById('personList');
+            const spinButton = document.getElementById('spinRouletteButton');
+            const resultDisplay = document.getElementById('rouletteResult');
+
+            const API_BASE_URL = window.location.origin;
+            const API_GET_PEOPLE = API_BASE_URL + '/api/get_people';
+            const API_SPIN_ROULETTE = API_BASE_URL + '/api/spin_roulette';
+            const API_LOGOUT = API_BASE_URL + '/api/logout';
+
+            // 서버에서 직접 렌더링된 current_user.name 값을 JavaScript 변수로 사용
+            const loggedInUserName = "{{ current_user.name }}"; 
+
+            async function fetchPeopleForRoulette() {
+                try {
+                    const response = await fetch(API_GET_PEOPLE);
+                    const data = await response.json();
+                    
+                    personListElement.innerHTML = '';
+                    let currentUserTickets = 0; // 현재 로그인된 사용자의 티켓 수
+
+                    if (response.ok && data.people && data.people.length > 0) {
+                        data.people.forEach(person => {
+                            // 관리자가 아닌 경우에만 목록에 추가 (admin 계정은 룰렛 돌리는 대상이 아니므로 제외)
+                            if (person.is_admin === false) { 
+                                const listItem = document.createElement('li');
+                                listItem.textContent = `${person.name}: `;
+                                const span = document.createElement('span');
+                                span.textContent = `${person.tickets}개`;
+                                listItem.appendChild(span);
+                                personListElement.appendChild(listItem);
+
+                                // 현재 로그인된 사용자의 티켓 수 저장
+                                if (person.name === loggedInUserName) {
+                                    currentUserTickets = person.tickets;
+                                }
+                            }
+                        });
+
+                        // 룰렛 버튼 활성화/비활성화는 현재 사용자의 룰렛권에 따라 결정
+                        spinButton.disabled = currentUserTickets === 0; // 본인 티켓이 없으면 비활성화
+                        if (currentUserTickets === 0) {
+                            resultDisplay.textContent = `😭 ${loggedInUserName}님은 룰렛권이 없습니다. 관리자에게 문의하세요.`;
+                            resultDisplay.style.color = 'orange';
+                        } else {
+                            // 룰렛권이 있을 때만 초기 메시지를 지움 (이미 꽝/당첨 결과 메시지가 아니라면)
+                            if (!resultDisplay.textContent.includes('축하합니다') && 
+                                !resultDisplay.textContent.includes('꽝입니다')) {
+                                resultDisplay.textContent = ''; 
+                            }
+                        }
+
+                    } else {
+                        const listItem = document.createElement('li');
+                        listItem.textContent = '등록된 이름이 없습니다.';
+                        personListElement.appendChild(listItem);
+                        spinButton.disabled = true;
+                        resultDisplay.textContent = '현재 룰렛권이 없습니다. 관리자에게 문의하세요.';
+                        resultDisplay.style.color = 'orange';
+                    }
+                } catch (error) {
+                    resultDisplay.textContent = '룰렛권 현황 불러오기 실패: 네트워크 오류';
+                    resultDisplay.style.color = 'red';
+                    console.error('Network error fetching people for roulette:', error);
+                    spinButton.disabled = true;
+                }
+            }
+
+            spinButton.addEventListener('click', async () => {
+                resultDisplay.textContent = '룰렛을 돌리는 중...';
+                resultDisplay.style.color = '#666';
+                spinButton.disabled = true; // 버튼 비활성화
+
+                try {
+                    // 1. 현재 로그인된 사용자의 룰렛권 정보만 가져오기 (가장 최신 상태로 확인)
+                    const peopleResponse = await fetch(API_GET_PEOPLE);
+                    const peopleData = await peopleResponse.json();
+
+                    if (!peopleResponse.ok || !peopleData.people) {
+                        resultDisplay.textContent = '사용자 정보를 불러올 수 없습니다. 다시 시도해주세요.';
+                        resultDisplay.style.color = 'red';
+                        spinButton.disabled = false;
+                        return;
+                    }
+
+                    const currentUser = peopleData.people.find(p => p.name === loggedInUserName);
+
+                    if (!currentUser) {
+                        resultDisplay.textContent = '로그인된 사용자 정보를 찾을 수 없습니다.';
+                        resultDisplay.style.color = 'red';
+                        spinButton.disabled = false;
+                        return;
+                    }
+
+                    if (currentUser.tickets <= 0) {
+                        resultDisplay.textContent = `😭 ${loggedInUserName}님은 룰렛권이 없습니다. 관리자에게 문의하세요.`;
+                        resultDisplay.style.color = 'orange';
+                        spinButton.disabled = false;
+                        return;
+                    }
+
+                    // --- 여기부터 중요! 룰렛 애니메이션 '척'하고 기다리는 시간 ---
+                    // 실제 룰렛이 돌아가는 것처럼 느끼게 할 지연 시간 (밀리초)
+                    const spinDuration = 3000; // 3초 동안 룰렛이 도는 것처럼!
+
+                    // 2. '당첨' 또는 '꽝' 결정 로직 (30% 확률로 당첨)
+                    const isWin = Math.random() < 0.3; // ✨ 0.3으로 변경하여 30% 당첨율 적용! ✨
+
+                    let tempResultText = '두근두근... 결과는?!'; // 룰렛 도는 중 표시할 메시지
+                    let tempResultColor = '#666';
+
+                    // 먼저 룰렛이 도는 중이라는 메시지를 표시
+                    resultDisplay.textContent = tempResultText;
+                    resultDisplay.style.color = tempResultColor;
+
+                    // spinDuration 시간 후에 실제 결과와 룰렛권 차감 로직 실행
+                    setTimeout(async () => {
+                        let finalResultText = '';
+                        let resultColor = '';
+
+                        if (isWin) {
+                            finalResultText = `🎉 축하합니다! ${loggedInUserName}님 당첨! 🎉`;
+                            resultColor = 'green';
+                        } else {
+                            finalResultText = `😂 ${loggedInUserName}님 꽝입니다! 다음에 다시 도전하세요! 😂`;
+                            resultColor = 'red';
+                        }
+
+                        // 3. 백엔드 API 호출하여 룰렛권 차감 (당첨이든 꽝이든 룰렛권은 소모됨)
+                        try {
+                            const spinResponse = await fetch(API_SPIN_ROULETTE, {
+                                method: 'POST',
+                                headers: {
+                                    'Content-Type': 'application/json'
+                                },
+                                body: JSON.stringify({ name: loggedInUserName }) // 현재 로그인된 사용자 이름 전달
+                            });
+
+                            const spinData = await spinResponse.json();
+
+                            if (!spinResponse.ok) {
+                                // 룰렛권 차감 실패 시에도 결과는 보여줘야 함 (이미 정해졌으니)
+                                resultDisplay.textContent = `룰렛권 차감 실패: ${spinData.message || '알 수 없는 오류'} (하지만 결과는 "${finalResultText.split('!')[0]}")`;
+                                resultDisplay.style.color = 'orange'; // 오류지만 결과는 보이게
+                                spinButton.disabled = false; // 버튼 다시 활성화
+                                fetchPeopleForRoulette(); // 최신 현황 업데이트
+                                return; // 여기서 함수 종료
+                            }
+
+                            // 룰렛 결과 표시 (이제 최종 결과)
+                            resultDisplay.textContent = finalResultText;
+                            resultDisplay.style.color = resultColor;
+
+                            // --- 결과 메시지를 유지할 시간 (밀리초) ---
+                            const resultDisplayDuration = 10000; // ✨ 10초 (10000ms)로 설정 ✨
+
+                            setTimeout(() => {
+                                resultDisplay.textContent = ''; // 메시지 초기화
+                                resultDisplay.style.color = '#333'; // 색상도 기본으로 돌려놓기
+                                spinButton.disabled = false; // 버튼 다시 활성화
+                                fetchPeopleForRoulette(); // 최신 룰렛권 현황 다시 불러오기 (메시지 사라진 후)
+                            }, resultDisplayDuration);
+
+                        } catch (spinError) {
+                            // 룰렛권 차감 API 호출 자체에 문제 발생 시
+                            resultDisplay.textContent = `룰렛권 차감 중 네트워크 오류 발생: ${spinError.message}`;
+                            resultDisplay.style.color = 'red';
+                            spinButton.disabled = false;
+                            fetchPeopleForRoulette();
+                        }
+
+                    }, spinDuration); // spinDuration 만큼 기다린 후 이 블록 실행
+
+                } catch (error) {
+                    // 초기 사용자 정보 fetch 실패 시
+                    resultDisplay.textContent = '초기 룰렛 준비 중 오류 발생: 네트워크 오류';
+                    resultDisplay.style.color = 'red';
+                    console.error('Error in initial roulette setup:', error);
+                    spinButton.disabled = false;
+                }
+            });
+
+            window.logout = async () => {
+                try {
+                    const response = await fetch(API_LOGOUT, { method: 'POST' });
+                    if (response.ok) {
+                        window.location.href = '/login'; // 로그아웃 성공 시 로그인 페이지로 리다이렉트
+                    } else {
+                        alert('로그아웃 실패!');
+                    }
+                } catch (error) {
+                    console.error('Logout error:', error);
+                    alert('로그아웃 중 네트워크 오류 발생!');
+                }
+            };
+
+            fetchPeopleForRoulette();
+            setInterval(fetchPeopleForRoulette, 5000); // 5초마다 현황 업데이트
+        });
+    </script>
+</body>
+</html>
