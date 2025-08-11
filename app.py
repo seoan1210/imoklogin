@@ -19,7 +19,7 @@ app.config['SQLALCHEMY_DATABASE_URI'] = os.environ.get('DATABASE_URL')
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 
 # 세션에 필요한 SECRET_KEY도 Vercel 환경 변수에 설정해두면 좋아!
-app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY') or 'your-super-duper-secret-key-please-change-me-12345'
+app.config['SQLALCHEMY_DATABASE_URI'] = os.environ.get('DATABASE_URL')
 
 db = SQLAlchemy(app)
 
@@ -148,3 +148,4 @@ def get_current_status():
 # `gunicorn`이 실행할 기본 앱 인스턴스
 if __name__ == '__main__':
     app.run(debug=True, port=int(os.environ.get("PORT", 5000)))
+
