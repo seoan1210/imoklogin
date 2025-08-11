@@ -1,5 +1,4 @@
 # -*- coding: utf-8 -*-
-# simple_roulette_app/app.py (수정된 전체 코드)
 
 from flask import Flask, request, jsonify, render_template, redirect, url_for, flash, session
 from flask_sqlalchemy import SQLAlchemy
@@ -13,13 +12,20 @@ from sqlalchemy.exc import IntegrityError, OperationalError
 # --- 1. Flask 앱 설정 ---
 app = Flask(__name__)
 
-# ⭐⭐ 여기를 수정! Neon DB를 사용하도록 환경 변수 설정 ⭐⭐
-# Vercel에서 Neon을 연결하면 자동으로 `DATABASE_URL`이 설정돼.
-app.config['SQLALCHEMY_DATABASE_URI'] = os.environ.get('DATABASE_URL')
+# ⭐⭐ Vercel 환경 변수 검사 및 설정 ⭐⭐
+# DATABASE_URL이 없으면 500 에러를 내지 않고, 친절한 메시지를 보여줘요.
+database_url = os.environ.get('DATABASE_URL')
+if not database_url:
+    print("Warning: DATABASE_URL is not set. The app will not connect to a database.")
+    # 개발 환경에서만 SQLite를 사용하도록 폴백
+    app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///site_data.db'
+else:
+    app.config['SQLALCHEMY_DATABASE_URI'] = database_url
+    
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 
-# 세션에 필요한 SECRET_KEY도 Vercel 환경 변수에 설정해두면 좋아!
-app.config['SQLALCHEMY_DATABASE_URI'] = os.environ.get('DATABASE_URL')
+# SECRET_KEY도 없으면 500 에러를 내지 않고 기본 키를 사용해요.
+app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY') or 'your-super-duper-secret-key-please-change-me-12345'
 
 db = SQLAlchemy(app)
 
@@ -33,7 +39,7 @@ login_manager.login_message = "로그인 해주세요."
 login_manager.login_message_category = "info"
 
 class Person(db.Model, UserMixin):
-    __tablename__ = 'person'  # 테이블 이름 명시
+    __tablename__ = 'person'
     id = db.Column(db.Integer, primary_key=True)
     name = db.Column(db.String(80), unique=True, nullable=False)
     password_hash = db.Column(db.String(256), nullable=False)
@@ -59,6 +65,9 @@ def load_user(user_id):
 # `db.create_all()`은 한 번만 실행되도록 별도의 라우트로 분리합니다.
 @app.route('/create-db')
 def create_db():
+    if not database_url:
+        return "Database URL is not configured. Please set the DATABASE_URL environment variable.", 500
+
     with app.app_context():
         try:
             db.create_all()
@@ -78,6 +87,9 @@ def create_db():
 @app.route('/')
 @login_required
 def index():
+    if not database_url:
+        return "Database is not configured. Please contact the administrator.", 500
+    
     return render_template('index.html')
 
 @app.route('/login', methods=['GET'])
@@ -87,6 +99,9 @@ def login_page():
 # 로그인 API
 @app.route('/api/login', methods=['POST'])
 def api_login():
+    if not database_url:
+        return jsonify({"message": "로그인 오류: 데이터베이스 연결이 설정되지 않았습니다."}), 500
+    
     data = request.json
     name = data.get('name')
     password = data.get('password')
@@ -101,6 +116,9 @@ def api_login():
 # 회원가입 API
 @app.route('/api/register', methods=['POST'])
 def api_register():
+    if not database_url:
+        return jsonify({"message": "회원가입 오류: 데이터베이스 연결이 설정되지 않았습니다."}), 500
+    
     data = request.json
     name = data.get('name')
     password = data.get('password')
@@ -129,23 +147,11 @@ def api_logout():
     logout_user()
     return jsonify({"message": "로그아웃 성공!"}), 200
 
-# API Endpoints for Roulette functionality (기존 코드 유지)
-# ... 이 부분은 기존 코드 그대로 유지하면 돼.
-
-# 룰렛 티켓 차감 및 당첨자 선정
-@app.route('/api/spin_roulette', methods=['POST'])
-@login_required
-def spin_roulette():
-    # ... 기존 코드
-    pass
-
-@app.route('/api/current_status', methods=['GET'])
-@login_required
-def get_current_status():
-    # ... 기존 코드
-    pass
-
 # `gunicorn`이 실행할 기본 앱 인스턴스
 if __name__ == '__main__':
+    if not database_url:
+        print("\n" + "="*50)
+        print("경고: DATABASE_URL이 설정되지 않아 로컬 SQLite DB를 사용합니다.")
+        print("Vercel에 배포하려면 환경 변수를 꼭 설정해주세요!")
+        print("="*50 + "\n")
     app.run(debug=True, port=int(os.environ.get("PORT", 5000)))
-
