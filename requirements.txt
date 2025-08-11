@@ -1,7 +1,7 @@
 Flask
 Flask-SQLAlchemy
+Flask-Cors
 Flask-Login
-Werkzeug
+psycopg2-binary  # ⭐⭐ 이게 꼭 필요해! ⭐⭐
 gunicorn
-flask-cors
-psycopg2-binary
+bcrypt
