@@ -163,3 +163,8 @@ def api_register():
 
     return jsonify({'message': '관리자 계정이 생성되었습니다.'}), 201
 
+# Vercel에서는 이 코드가 필요 없음
+# if __name__ == '__main__':
+#     with app.app_context():
+#         db.create_all()
+#     app.run(debug=True)
