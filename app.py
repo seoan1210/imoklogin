@@ -12,8 +12,7 @@ load_dotenv()
 
 app = Flask(__name__)
 app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY')
-# PostgreSQL 드라이버를 명시적으로 지정하도록 수정
-app.config['SQLALCHEMY_DATABASE_URI'] = os.environ.get('DATABASE_URL').replace('postgresql://', 'postgresql+psycopg2://')
+app.config['SQLALCHEMY_DATABASE_URI'] = os.environ.get('DATABASE_URL')
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 
 db = SQLAlchemy(app)
@@ -162,3 +161,4 @@ def api_register():
     db.session.commit()
 
     return jsonify({'message': '관리자 계정이 생성되었습니다.'}), 201
+
