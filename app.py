@@ -1,157 +1,183 @@
-# -*- coding: utf-8 -*-
-
-from flask import Flask, request, jsonify, render_template, redirect, url_for, flash, session
-from flask_sqlalchemy import SQLAlchemy
-from flask_cors import CORS
-from datetime import datetime, date, timedelta
+# app.py
 import os
+from flask import Flask, render_template, request, jsonify, session, redirect, url_for, flash
+from flask_sqlalchemy import SQLAlchemy
 from werkzeug.security import generate_password_hash, check_password_hash
-from flask_login import LoginManager, UserMixin, login_user, logout_user, login_required, current_user
-from sqlalchemy.exc import IntegrityError, OperationalError
+import psycopg2
+import bcrypt
+from dotenv import load_dotenv
 
-# --- 1. Flask 앱 설정 ---
+# .env 파일에서 환경 변수 불러오기
+load_dotenv()
+
 app = Flask(__name__)
-
-# ⭐⭐ Vercel 환경 변수 검사 및 설정 ⭐⭐
-# DATABASE_URL이 없으면 500 에러를 내지 않고, 친절한 메시지를 보여줘요.
-database_url = os.environ.get('DATABASE_URL')
-if not database_url:
-    print("Warning: DATABASE_URL is not set. The app will not connect to a database.")
-    # 개발 환경에서만 SQLite를 사용하도록 폴백
-    app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///site_data.db'
-else:
-    app.config['SQLALCHEMY_DATABASE_URI'] = database_url
-    
+app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY')
+app.config['SQLALCHEMY_DATABASE_URI'] = os.environ.get('DATABASE_URL')
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
-
-# SECRET_KEY도 없으면 500 에러를 내지 않고 기본 키를 사용해요.
-app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY') or 'your-super-duper-secret-key-please-change-me-12345'
 
 db = SQLAlchemy(app)
 
-CORS(app)
+# Neon DB 접속을 위한 별도 설정 (Flask-SQLAlchemy가 psycopg2를 사용하도록 함)
+def get_db_connection():
+    conn_string = os.environ.get('DATABASE_URL')
+    if not conn_string:
+        raise ValueError("DATABASE_URL is not set!")
+    conn = psycopg2.connect(conn_string)
+    return conn
 
-# --- 2. Flask-Login 설정 ---
-login_manager = LoginManager()
-login_manager.init_app(app)
-login_manager.login_view = 'login_page'
-login_manager.login_message = "로그인 해주세요."
-login_manager.login_message_category = "info"
-
-class Person(db.Model, UserMixin):
-    __tablename__ = 'person'
+# 데이터베이스 모델 (테이블) 정의
+class User(db.Model):
+    __tablename__ = 'users'
     id = db.Column(db.Integer, primary_key=True)
     name = db.Column(db.String(80), unique=True, nullable=False)
-    password_hash = db.Column(db.String(256), nullable=False)
+    password_hash = db.Column(db.String(120), nullable=False)
+    tickets = db.Column(db.Integer, default=0)
     is_admin = db.Column(db.Boolean, default=False)
-    roulette_ticket_count = db.Column(db.Integer, default=5)
-    last_roulette_date = db.Column(db.Date, default=date(2000, 1, 1))
-
-    def set_password(self, password):
-        self.password_hash = generate_password_hash(password)
-
-    def check_password(self, password):
-        return check_password_hash(self.password_hash, password)
 
     def __repr__(self):
-        return f'<Person {self.name}>'
+        return f'<User {self.name}>'
 
-@login_manager.user_loader
-def load_user(user_id):
-    return Person.query.get(int(user_id))
+    def set_password(self, password):
+        self.password_hash = bcrypt.hashpw(password.encode('utf-8'), bcrypt.gensalt()).decode('utf-8')
 
-# ⭐⭐ `db.create_all()` 로직 수정 ⭐⭐
-# Vercel 배포 시 `init_db.py`가 실행되지 않으므로,
-# `db.create_all()`은 한 번만 실행되도록 별도의 라우트로 분리합니다.
-@app.route('/create-db')
-def create_db():
-    if not database_url:
-        return "Database URL is not configured. Please set the DATABASE_URL environment variable.", 500
+    def check_password(self, password):
+        return bcrypt.checkpw(password.encode('utf-8'), self.password_hash.encode('utf-8'))
 
+# 데이터베이스 테이블 생성 (개발 시 한 번만 실행!)
+@app.before_first_request
+def create_tables():
     with app.app_context():
-        try:
-            db.create_all()
-            if not Person.query.filter_by(name='admin').first():
-                admin_password = os.getenv("ADMIN_PASSWORD", "seoan1024")
-                admin_user = Person(name='admin', is_admin=True)
-                admin_user.set_password(admin_password)
-                db.session.add(admin_user)
-                db.session.commit()
-                return "Database and Admin User created successfully!", 200
-            return "Database tables already exist. Admin user checked.", 200
-        except Exception as e:
-            db.session.rollback()
-            return f"Error during database initialization: {e}", 500
+        db.create_all()
 
-# --- 3. 라우트 정의 ---
-@app.route('/')
-@login_required
-def index():
-    if not database_url:
-        return "Database is not configured. Please contact the administrator.", 500
-    
-    return render_template('index.html')
+# 로그인 확인 데코레이터
+def login_required(f):
+    def wrap(*args, **kwargs):
+        if 'user_id' not in session:
+            flash('로그인이 필요합니다.', 'error')
+            return redirect(url_for('login'))
+        return f(*args, **kwargs)
+    wrap.__name__ = f.__name__
+    return wrap
 
-@app.route('/login', methods=['GET'])
-def login_page():
+# --- 라우팅 (URL 경로) 설정 ---
+
+# 로그인 페이지
+@app.route('/login')
+def login():
     return render_template('login.html')
 
-# 로그인 API
+# 로그인 처리 API
 @app.route('/api/login', methods=['POST'])
 def api_login():
-    if not database_url:
-        return jsonify({"message": "로그인 오류: 데이터베이스 연결이 설정되지 않았습니다."}), 500
-    
-    data = request.json
+    data = request.get_json()
     name = data.get('name')
     password = data.get('password')
 
-    person = Person.query.filter_by(name=name).first()
-    if person and person.check_password(password):
-        login_user(person, remember=True)
-        return jsonify({"message": f"로그인 성공! 환영합니다, {person.name}님!", "redirect_url": url_for('index')}), 200
-    else:
-        return jsonify({"message": "로그인 실패: 아이디 또는 비밀번호가 올바르지 않습니다."}), 401
+    user = User.query.filter_by(name=name).first()
 
-# 회원가입 API
+    if user and user.check_password(password):
+        session['user_id'] = user.id
+        session['user_name'] = user.name
+        return jsonify({'message': '로그인 성공!', 'redirect_url': url_for('index')}), 200
+    else:
+        return jsonify({'message': '아이디 또는 비밀번호가 잘못되었습니다.'}), 401
+
+# 로그아웃 API
+@app.route('/api/logout', methods=['POST'])
+def api_logout():
+    session.pop('user_id', None)
+    session.pop('user_name', None)
+    flash('성공적으로 로그아웃되었습니다.', 'success')
+    return jsonify({'message': '로그아웃 성공'}), 200
+
+# 룰렛 페이지 (메인 페이지)
+@app.route('/')
+@login_required
+def index():
+    # 현재 로그인된 사용자 정보 가져오기
+    current_user = User.query.filter_by(id=session['user_id']).first()
+    return render_template('index.html', current_user=current_user)
+
+# 사용자 목록 불러오기 API
+@app.route('/api/get_people', methods=['GET'])
+@login_required
+def api_get_people():
+    try:
+        users = User.query.filter_by(is_admin=False).order_by(User.name).all()
+        user_list = [{'name': user.name, 'tickets': user.tickets, 'is_admin': user.is_admin} for user in users]
+        return jsonify({'people': user_list}), 200
+    except Exception as e:
+        print(f"Error fetching people: {e}")
+        return jsonify({'message': '사용자 목록을 불러오는 데 실패했습니다.'}), 500
+
+# 룰렛 돌리기 API
+@app.route('/api/spin_roulette', methods=['POST'])
+@login_required
+def api_spin_roulette():
+    data = request.get_json()
+    name = data.get('name')
+
+    conn = get_db_connection()
+    cur = conn.cursor()
+
+    try:
+        cur.execute("BEGIN;")
+
+        # 트랜잭션: 현재 사용자의 룰렛권 확인 및 차감
+        cur.execute("SELECT tickets FROM users WHERE name = %s FOR UPDATE;", (name,))
+        user_tickets = cur.fetchone()
+
+        if not user_tickets or user_tickets[0] <= 0:
+            cur.execute("ROLLBACK;")
+            return jsonify({'message': '룰렛권이 부족합니다.'}), 400
+
+        cur.execute("UPDATE users SET tickets = tickets - 1 WHERE name = %s;", (name,))
+
+        # 룰렛 결과 결정 (30% 확률로 당첨)
+        is_win = os.urandom(1)[0] < 256 * 0.3
+        
+        cur.execute("COMMIT;")
+        
+        return jsonify({'message': '룰렛 성공!', 'isWin': is_win}), 200
+
+    except Exception as e:
+        cur.execute("ROLLBACK;")
+        print(f"Error spinning roulette: {e}")
+        return jsonify({'message': '룰렛을 돌리는 중 오류가 발생했습니다.'}), 500
+    finally:
+        cur.close()
+        conn.close()
+
+# 관리자 계정 등록 (개발용)
+@app.route('/register')
+def register():
+    # 이 페이지는 보안상 로컬에서만 접근 가능하도록 설정하는 것이 좋음
+    return render_template('register.html')
+
 @app.route('/api/register', methods=['POST'])
 def api_register():
-    if not database_url:
-        return jsonify({"message": "회원가입 오류: 데이터베이스 연결이 설정되지 않았습니다."}), 500
-    
-    data = request.json
+    data = request.get_json()
     name = data.get('name')
     password = data.get('password')
 
     if not name or not password:
-        return jsonify({"message": "아이디와 비밀번호를 모두 입력해주세요."}), 400
+        return jsonify({'message': '모든 필드를 입력하세요.'}), 400
 
-    existing_user = Person.query.filter_by(name=name).first()
+    existing_user = User.query.filter_by(name=name).first()
     if existing_user:
-        return jsonify({"message": "이미 존재하는 아이디입니다."}), 409
-    
-    new_user = Person(name=name)
-    new_user.set_password(password)
-    
-    try:
-        db.session.add(new_user)
-        db.session.commit()
-        return jsonify({"message": f"회원가입 성공! 이제 {name}님으로 로그인할 수 있습니다."}), 201
-    except Exception as e:
-        db.session.rollback()
-        return jsonify({"message": f"회원가입 중 오류가 발생했습니다: {str(e)}"}), 500
+        return jsonify({'message': '이미 존재하는 사용자 이름입니다.'}), 409
 
-@app.route('/logout', methods=['POST'])
-@login_required
-def api_logout():
-    logout_user()
-    return jsonify({"message": "로그아웃 성공!"}), 200
+    hashed_password = bcrypt.hashpw(password.encode('utf-8'), bcrypt.gensalt()).decode('utf-8')
+    new_user = User(name=name, password_hash=hashed_password, is_admin=True)
 
-# `gunicorn`이 실행할 기본 앱 인스턴스
+    db.session.add(new_user)
+    db.session.commit()
+
+    return jsonify({'message': '관리자 계정이 생성되었습니다.'}), 201
+
+# 앱 실행
 if __name__ == '__main__':
-    if not database_url:
-        print("\n" + "="*50)
-        print("경고: DATABASE_URL이 설정되지 않아 로컬 SQLite DB를 사용합니다.")
-        print("Vercel에 배포하려면 환경 변수를 꼭 설정해주세요!")
-        print("="*50 + "\n")
-    app.run(debug=True, port=int(os.environ.get("PORT", 5000)))
+    with app.app_context():
+        # 데이터베이스와 테이블이 없으면 생성
+        db.create_all()
+    app.run(debug=True)
