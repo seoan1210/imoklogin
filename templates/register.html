@@ -1,0 +1,41 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>관리자 계정 등록 (개발용)</title>
+    <style>
+        body { font-family: sans-serif; display: flex; justify-content: center; align-items: center; height: 100vh; background: #f0f2f5; }
+        .container { background: white; padding: 2em; border-radius: 8px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); text-align: center; }
+        input, button { display: block; width: 100%; margin: 1em 0; padding: 0.8em; }
+        button { background: #007bff; color: white; border: none; cursor: pointer; }
+        #message { margin-top: 1em; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>관리자 계정 등록</h1>
+        <p>개발용으로 관리자 계정을 생성합니다.</p>
+        <input type="text" id="name" placeholder="관리자 이름">
+        <input type="password" id="password" placeholder="비밀번호">
+        <button id="registerBtn">계정 생성</button>
+        <div id="message"></div>
+    </div>
+    <script>
+        document.getElementById('registerBtn').addEventListener('click', async () => {
+            const name = document.getElementById('name').value;
+            const password = document.getElementById('password').value;
+            const messageDiv = document.getElementById('message');
+
+            const res = await fetch('/api/register', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ name, password })
+            });
+            const data = await res.json();
+            messageDiv.textContent = data.message;
+            messageDiv.style.color = res.ok ? 'green' : 'red';
+        });
+    </script>
+</body>
+</html>
