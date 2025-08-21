@@ -1,164 +1,140 @@
-# app.py
-import os
-import bcrypt
-import psycopg2
-from dotenv import load_dotenv
-from flask import Flask, render_template, request, jsonify, session, redirect, url_for, flash
+from flask import Flask, render_template, request, jsonify, redirect, url_for, flash, session
 from flask_sqlalchemy import SQLAlchemy
-from werkzeug.security import generate_password_hash, check_password_hash
+import os
+import random
 
-# .env 파일에서 환경 변수 불러오기
-load_dotenv()
-
+# Flask 애플리케이션 초기화
 app = Flask(__name__)
-app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY')
-app.config['SQLALCHEMY_DATABASE_URI'] = os.environ.get('DATABASE_URL')
+
+# 데이터베이스 설정 (SQLite 사용)
+# os.urandom(24)로 세션 암호화 키 설정
+app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY') or os.urandom(24)
+app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///roulette.db'
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 
 db = SQLAlchemy(app)
 
-# Neon DB 접속을 위한 별도 설정 (Flask-SQLalchemy 외에 psycopg2 직접 사용)
-def get_db_connection():
-    conn_string = os.environ.get('DATABASE_URL')
-    if not conn_string:
-        raise ValueError("DATABASE_URL is not set!")
-    conn = psycopg2.connect(conn_string)
-    return conn
-
-# 데이터베이스 모델 (테이블) 정의
+# --- 데이터베이스 모델 정의 ---
 class User(db.Model):
-    __tablename__ = 'users'
     id = db.Column(db.Integer, primary_key=True)
     name = db.Column(db.String(80), unique=True, nullable=False)
-    password_hash = db.Column(db.String(120), nullable=False)
-    tickets = db.Column(db.Integer, default=0)
+    password = db.Column(db.String(120), nullable=False)
     is_admin = db.Column(db.Boolean, default=False)
+    tickets = db.Column(db.Integer, default=10) # 기본 룰렛 티켓 10개
 
     def __repr__(self):
         return f'<User {self.name}>'
 
-    def set_password(self, password):
-        self.password_hash = bcrypt.hashpw(password.encode('utf-8'), bcrypt.gensalt()).decode('utf-8')
+# --- 초기 데이터베이스 생성 ---
+# 이 함수는 처음 한 번만 실행하면 됩니다.
+def create_initial_data():
+    with app.app_context():
+        db.create_all()
+        # 관리자 계정이 없으면 생성
+        if not User.query.filter_by(is_admin=True).first():
+            # 비밀번호는 실제로는 해시 처리해야 하지만, 예시이므로 간단히 작성
+            admin_user = User(name='admin', password='password123', is_admin=True, tickets=999)
+            db.session.add(admin_user)
+            db.session.commit()
+            print("관리자 계정 'admin'이 생성되었습니다.")
+        
+        # 일반 사용자 계정이 없으면 생성
+        if not User.query.filter_by(name='user1').first():
+            user1 = User(name='user1', password='password123', is_admin=False, tickets=5)
+            db.session.add(user1)
+            db.session.commit()
+            print("일반 사용자 'user1'이 생성되었습니다.")
 
-    def check_password(self, password):
-        return bcrypt.checkpw(password.encode('utf-8'), self.password_hash.encode('utf-8'))
+# --- 라우팅(URL 경로) 설정 ---
 
-# Vercel 환경에서는 @app.before_first_request가 적합하지 않으므로 삭제!
-# 대신, Neon DB 대시보드에서 테이블을 직접 생성해야 함.
-
-# 로그인 확인 데코레이터
-def login_required(f):
-    def wrap(*args, **kwargs):
-        if 'user_id' not in session:
-            flash('로그인이 필요합니다.', 'error')
-            return redirect(url_for('login'))
-        return f(*args, **kwargs)
-    wrap.__name__ = f.__name__
-    return wrap
-
-# --- 라우팅 (URL 경로) 설정 ---
-
-@app.route('/login')
+# 로그인 페이지
+@app.route('/login', methods=['GET'])
 def login():
+    # 세션에 사용자 정보가 있으면 바로 index 페이지로 리다이렉트
+    if 'user_id' in session:
+        return redirect(url_for('index'))
     return render_template('login.html')
 
+# 로그인 API
 @app.route('/api/login', methods=['POST'])
 def api_login():
-    data = request.get_json()
-    name = data.get('name')
+    data = request.json
+    username = data.get('name')
     password = data.get('password')
 
-    user = User.query.filter_by(name=name).first()
+    user = User.query.filter_by(name=username, password=password).first()
 
-    if user and user.check_password(password):
+    if user:
         session['user_id'] = user.id
-        session['user_name'] = user.name
-        return jsonify({'message': '로그인 성공!', 'redirect_url': url_for('index')}), 200
+        session['username'] = user.name
+        return jsonify(
+            message='로그인 성공!', 
+            redirect_url=url_for('index')
+        ), 200
     else:
-        return jsonify({'message': '아이디 또는 비밀번호가 잘못되었습니다.'}), 401
+        return jsonify(
+            message='로그인 실패. 아이디 또는 비밀번호를 확인해주세요.'
+        ), 401
 
+# 로그아웃 API
 @app.route('/api/logout', methods=['POST'])
 def api_logout():
     session.pop('user_id', None)
-    session.pop('user_name', None)
-    flash('성공적으로 로그아웃되었습니다.', 'success')
-    return jsonify({'message': '로그아웃 성공'}), 200
+    session.pop('username', None)
+    return jsonify(message='로그아웃 성공'), 200
 
+# 룰렛 메인 페이지
 @app.route('/')
-@login_required
 def index():
-    current_user = User.query.filter_by(id=session['user_id']).first()
+    if 'user_id' not in session:
+        flash('로그인이 필요합니다.')
+        return redirect(url_for('login'))
+    
+    # 세션에 있는 사용자 정보를 바탕으로 현재 사용자를 찾음
+    current_user_id = session.get('user_id')
+    current_user = User.query.get(current_user_id)
+    
+    if not current_user:
+        flash('사용자 정보를 찾을 수 없습니다. 다시 로그인해주세요.')
+        session.pop('user_id', None)
+        return redirect(url_for('login'))
+
+    # Jinja2 템플릿에 `current_user` 변수 전달
     return render_template('index.html', current_user=current_user)
 
+# 룰렛 대상 목록 가져오는 API
 @app.route('/api/get_people', methods=['GET'])
-@login_required
-def api_get_people():
-    try:
-        users = User.query.filter_by(is_admin=False).order_by(User.name).all()
-        user_list = [{'name': user.name, 'tickets': user.tickets, 'is_admin': user.is_admin} for user in users]
-        return jsonify({'people': user_list}), 200
-    except Exception as e:
-        print(f"Error fetching people: {e}")
-        return jsonify({'message': '사용자 목록을 불러오는 데 실패했습니다.'}), 500
+def get_people():
+    # 룰렛 대상은 관리자가 아닌 모든 사용자
+    people = User.query.filter_by(is_admin=False).all()
+    # 필요한 정보만 JSON 형식으로 변환
+    people_data = [
+        {'name': p.name, 'tickets': p.tickets, 'is_admin': p.is_admin} for p in people
+    ]
+    return jsonify(people=people_data), 200
 
+# 룰렛 돌리는 API
 @app.route('/api/spin_roulette', methods=['POST'])
-@login_required
-def api_spin_roulette():
-    data = request.get_json()
-    name = data.get('name')
+def spin_roulette():
+    if 'user_id' not in session:
+        return jsonify(message='로그인이 필요합니다.'), 401
+    
+    data = request.json
+    username = data.get('name')
 
-    conn = get_db_connection()
-    cur = conn.cursor()
+    user = User.query.filter_by(name=username).first()
+    if not user:
+        return jsonify(message='사용자를 찾을 수 없습니다.'), 404
 
-    try:
-        cur.execute("BEGIN;")
+    if user.tickets <= 0:
+        return jsonify(message='룰렛권이 부족합니다.'), 400
 
-        cur.execute("SELECT tickets FROM users WHERE name = %s FOR UPDATE;", (name,))
-        user_tickets = cur.fetchone()
-
-        if not user_tickets or user_tickets[0] <= 0:
-            cur.execute("ROLLBACK;")
-            return jsonify({'message': '룰렛권이 부족합니다.'}), 400
-
-        cur.execute("UPDATE users SET tickets = tickets - 1 WHERE name = %s;", (name,))
-
-        is_win = os.urandom(1)[0] < 256 * 0.3
-        
-        cur.execute("COMMIT;")
-        
-        return jsonify({'message': '룰렛 성공!', 'isWin': is_win}), 200
-
-    except Exception as e:
-        cur.execute("ROLLBACK;")
-        print(f"Error spinning roulette: {e}")
-        return jsonify({'message': '룰렛을 돌리는 중 오류가 발생했습니다.'}), 500
-    finally:
-        cur.close()
-        conn.close()
-
-# 관리자 계정 등록 (개발용)
-@app.route('/register')
-def register():
-    return render_template('register.html')
-
-@app.route('/api/register', methods=['POST'])
-def api_register():
-    data = request.get_json()
-    name = data.get('name')
-    password = data.get('password')
-
-    if not name or not password:
-        return jsonify({'message': '모든 필드를 입력하세요.'}), 400
-
-    existing_user = User.query.filter_by(name=name).first()
-    if existing_user:
-        return jsonify({'message': '이미 존재하는 사용자 이름입니다.'}), 409
-
-    hashed_password = bcrypt.hashpw(password.encode('utf-8'), bcrypt.gensalt()).decode('utf-8')
-    new_user = User(name=name, password_hash=hashed_password, is_admin=True)
-
-    db.session.add(new_user)
+    # 룰렛권 1개 차감
+    user.tickets -= 1
     db.session.commit()
 
-    return jsonify({'message': '관리자 계정이 생성되었습니다.'}), 201
+    return jsonify(message='룰렛권이 차감되었습니다.'), 200
 
+if __name__ == '__main__':
+    create_initial_data() # 데이터베이스 초기화 및 초기 사용자 생성
+    app.run(debug=True)
