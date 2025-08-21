@@ -1,7 +1,7 @@
 Flask
-flask-sqlalchemy
-psycopg2-binary
-python-dotenv
+Flask-SQLAlchemy
+Flask-Login
 Werkzeug
-bcrypt
-SQLAlchemy<2.0.0
+gunicorn
+flask-cors
+psycopg2-binary
