@@ -72,11 +72,11 @@ def check_and_reset_stars(person):
         print(f"[{person.name}]의 별점이 초기화되었습니다!")
         db.session.commit()
     
-    if person.stars >= 5:
+    if person.stars >= 2:
         person.tickets += 1
         person.stars = 0
         db.session.commit()
-        print(f"[{person.name}]의 별점 5개가 모여 룰렛권 1개가 지급되었습니다! (남은 룰렛권: {person.tickets})")
+        print(f"[{person.name}]의 별점 2개가 모여 룰렛권 1개가 지급되었습니다! (남은 룰렛권: {person.tickets})")
 
 
 # --- 4. 웹 페이지 라우트 (HTML 파일 렌더링) ---
@@ -972,3 +972,4 @@ if __name__ == '__main__':
             print(f"Unexpected error during admin user check/creation: {e}")
 
     app.run(debug=False, port=5000)
+
