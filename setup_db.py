@@ -2,7 +2,7 @@
 
 import os
 from app import app, db, Person
-
+db.drop_all()
 def create_database_and_admin_user():
     with app.app_context():
         try:
