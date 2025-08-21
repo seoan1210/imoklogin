@@ -25,7 +25,7 @@ class User(db.Model):
     def __repr__(self):
         return f'<User {self.name}>'
 
-# --- 초기 데이터베이스 생성 ---
+# --- 초기 데이터베이스 생성 및 초기 사용자 생성 ---
 # 이 함수는 처음 한 번만 실행하면 됩니다.
 def create_initial_data():
     with app.app_context():
@@ -134,6 +134,27 @@ def spin_roulette():
     db.session.commit()
 
     return jsonify(message='룰렛권이 차감되었습니다.'), 200
+
+# 새로운 관리자 계정 생성 (개발용)
+@app.route('/register', methods=['GET', 'POST'])
+def register():
+    if request.method == 'POST':
+        name = request.form['name']
+        password = request.form['password']
+        
+        existing_user = User.query.filter_by(name=name).first()
+        if existing_user:
+            flash('이미 존재하는 이름입니다. 다른 이름을 사용해주세요.')
+            return redirect(url_for('register'))
+        
+        new_admin = User(name=name, password=password, is_admin=True)
+        db.session.add(new_admin)
+        db.session.commit()
+        
+        flash('관리자 계정이 성공적으로 생성되었습니다. 이제 로그인하세요!')
+        return redirect(url_for('login'))
+    
+    return render_template('register.html') # register.html 파일이 필요합니다.
 
 if __name__ == '__main__':
     create_initial_data() # 데이터베이스 초기화 및 초기 사용자 생성
