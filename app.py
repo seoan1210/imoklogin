@@ -65,12 +65,6 @@ def load_user(user_id):
 
 def check_and_reset_stars(person):
     today = date.today()
-
-    if today.weekday() == 6 and person.last_star_reset_date < today:
-        person.stars = 0
-        person.last_star_reset_date = today
-        print(f"[{person.name}]의 별점이 초기화되었습니다!")
-        db.session.commit()
     
     if person.stars >= 2:
         person.tickets += 1
@@ -972,4 +966,5 @@ if __name__ == '__main__':
             print(f"Unexpected error during admin user check/creation: {e}")
 
     app.run(debug=False, port=5000)
+
 
