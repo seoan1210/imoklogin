@@ -5,5 +5,3 @@ Werkzeug
 gunicorn
 flask-cors
 psycopg2-binary
-flask_vercel
-
