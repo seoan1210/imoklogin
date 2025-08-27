@@ -1,0 +1,21 @@
+{
+  "builds": [
+    {
+      "src": "app.py",
+      "use": "@vercel/python"
+    }
+  ],
+  "routes": [
+    {
+      "src": "/(.*)",
+      "dest": "app.py"
+    }
+  ],
+  "build": {
+    "env": {
+      "PYTHONUNBUFFERED": "1"
+    }
+  },
+  "installCommand": "pip install -r requirements.txt",
+  "buildCommand": "python init_db.py"
+}
